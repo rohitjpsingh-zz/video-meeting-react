@@ -1,7 +1,7 @@
 {
   "name": "video",
   "version": "0.1.0",
-  "homepage":"/",
+  "homepage":"https://video-meeting-react.netlify.app/",
   "private": true,
   "dependencies": {
     "@material-ui/core": "^4.9.7",
