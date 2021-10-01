@@ -20,7 +20,7 @@ import Modal from 'react-bootstrap/Modal'
 import 'bootstrap/dist/css/bootstrap.css'
 import "./Video.css"
 
-const server_url = process.env.NODE_ENV === 'production' ? 'https://video.sebastienbiollo.com' : "http://localhost:4001"
+const server_url = process.env.NODE_ENV === 'production' ? 'https://video.sebastienbiollo.com' : "https://859c-43-248-34-97.ngrok.io"
 
 var connections = {}
 const peerConnectionConfig = {
@@ -275,9 +275,9 @@ class Video extends Component {
 		socket.on('signal', this.gotMessageFromServer)
 
 		socket.on('connect', () => {
-			socket.emit('join-call', window.location.href)
 			socketId = socket.id
-
+			socket.emit('join-call', {path:window.location.href,userId:socketId,userName:this.state.username})
+			console.log("Client Socket Id:",socketId);
 			socket.on('chat-message', this.addMessage)
 
 			socket.on('user-left', (id) => {
@@ -292,19 +292,22 @@ class Video extends Component {
 			})
 
 			socket.on('user-joined', (id, clients) => {
-				clients.forEach((socketListId) => {
-					connections[socketListId] = new RTCPeerConnection(peerConnectionConfig)
+				console.log("user-joined:",id,clients);
+				clients.forEach((user) => {
+					let userId = user.userId;
+					let userName = user.userName;
+					connections[userId] = new RTCPeerConnection(peerConnectionConfig)
 					// Wait for their ice candidate       
-					connections[socketListId].onicecandidate = function (event) {
+					connections[userId].onicecandidate = function (event) {
 						if (event.candidate != null) {
-							socket.emit('signal', socketListId, JSON.stringify({ 'ice': event.candidate }))
+							socket.emit('signal', userId, JSON.stringify({ 'ice': event.candidate }))
 						}
 					}
 
 					// Wait for their video stream
-					connections[socketListId].onaddstream = (event) => {
+					connections[userId].onaddstream = (event) => {
 						// TODO mute button, full screen button
-						var searchVidep = document.querySelector(`[data-socket="${socketListId}"]`)
+						var searchVidep = document.querySelector(`[data-socket="${userId}"]`)
 						if (searchVidep !== null) { // if i don't do this check it make an empyt square
 							searchVidep.srcObject = event.stream
 						} else {
@@ -320,7 +323,8 @@ class Video extends Component {
 
 							video.style.setProperty("width", cssMesure.width)
 							video.style.setProperty("height", cssMesure.height)
-							video.setAttribute('data-socket', socketListId)
+							video.setAttribute('data-socket', userId)
+							video.setAttribute('data-userName', userName)
 							video.srcObject = event.stream
 							video.autoplay = true
 							video.playsinline = true
@@ -331,11 +335,11 @@ class Video extends Component {
 
 					// Add the local video stream
 					if (window.localStream !== undefined && window.localStream !== null) {
-						connections[socketListId].addStream(window.localStream)
+						connections[userId].addStream(window.localStream)
 					} else {
 						let blackSilence = (...args) => new MediaStream([this.black(...args), this.silence()])
 						window.localStream = blackSilence()
-						connections[socketListId].addStream(window.localStream)
+						connections[userId].addStream(window.localStream)
 					}
 				})
 
@@ -393,7 +397,7 @@ class Video extends Component {
 
 	addMessage = (data, sender, socketIdSender) => {
 		this.setState(prevState => ({
-			messages: [...prevState.messages, { "sender": sender, "data": data }],
+			messages: [...prevState.messages, { "sender": sender, "data": data, "reciever":socketIdSender !== socketId ? true : false  }],
 		}))
 		if (socketIdSender !== socketId) {
 			this.setState({ newmessages: this.state.newmessages + 1 })
@@ -501,7 +505,7 @@ class Video extends Component {
 							</Modal.Header>
 							<Modal.Body style={{ overflow: "auto", overflowY: "auto", height: "400px", textAlign: "left" }} >
 								{this.state.messages.length > 0 ? this.state.messages.map((item, index) => (
-									<div key={index} style={{textAlign: "left"}}>
+									<div key={index} style={{textAlign: item.reciever ? "left" : "right"}}>
 										<p style={{ wordBreak: "break-all" }}><b>{item.sender}</b>: {item.data}</p>
 									</div>
 								)) : <p>No message yet</p>}
